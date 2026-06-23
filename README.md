@@ -32,3 +32,20 @@ Development (BDD) can be integrated into Cypress test suites using the
 
 ## 📌 Note
 This is a sample/demo project intended for practice and portfolio purposes.
+
+## 🏃 How to Run
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd CypreswithBDDCucumber
+
+# Install dependencies
+npm ci
+
+# Open Cypress UI (optional)
+npx cypress open
+
+# Run all tests headlessly
+npx cypress run
+```

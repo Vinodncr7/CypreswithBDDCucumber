@@ -1,0 +1,164 @@
+# Front End Acceptance Tests
+name: Front End Acceptance Tests
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "The target environment against which the tests should run"
+        required: true
+        type: string
+        default: "dev0"
+      tenant:
+        description: "If provided, target the specified tenant (a.k.a. customer)"
+        required: false
+        type: string
+        default: ""
+      tests:
+        description: 'If provided, only run the specified tests (comma-delimited). Set Specs files without .ts suffix like "admin/tenant_settings_spec,login/sso,login/reset_password_email_spec"'
+        required: false
+        type: string
+      cypress_record_key:
+        description: "Cypress Record Key. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-a-Record-Key"
+        required: false
+        type: string
+      cypress_project_id:
+        description: "Cypress Project ID. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-the-projectId-for"
+        required: false
+        type: string
+    secrets:
+      DOCKER_CA:
+        required: true
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      CYPRESS_NONADMINPASSWORD:
+        required: true
+      CYPRESS_ADMINPASSWORD:
+        required: true
+      CYPRESS_AUDITLOGTESTPASSWORD:
+        required: true
+      CYPRESS_IMAPMAILBOXPASSWORD:
+        required: true
+      CYPRESS_SSOPASSWORD:
+        required: true
+      CYPRESS_SSOV2_PASSWORD:
+        required: true
+      CYPRESS_API_KEY_DEV0:
+        required: true
+      CYPRESS_API_KEY_QA0:
+        required: true
+      CYPRESS_API_KEY_STAGING0:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "The  target environment against which the tests should run"
+        required: true
+        type: choice
+        options:
+          - dev0
+          - qa0
+          - staging0
+        default: "dev0"
+      tenant:
+        description: "If provided, target the specified tenant (a.k. customer)"
+        required: false
+        type: string
+        default: ""
+      tests:
+        description: 'If provided, only run the specified tests (comma-delimited). Set Specs files without .ts suffix like "admin/tenant_settings_spec,login/sso,login/reset_password_email_spec". See available tests in https://github.com//-ctrlx/tree/main/integration/cypress/e2e'
+        required: false
+        type: string
+      cypress_record_key:
+        description: "Cypress Record Key. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-a-Record-Key"
+        required: false
+        type: string
+      cypress_project_id:
+        description: "Cypress Project ID. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-the-projectId-for"
+        required: false
+        type: string
+
+# PRO TIP: Remember any cypress env vars added here must be passed through to the Cypress docker container below.
+# Also note, given the number of env vars involved, it would be preferable to set the Cypress env vars
+# only for the one task that actually uses them.
+env:
+  REGISTRY: registry..io
+  IMAGE: -ctrlx-cypress
+
+jobs:
+  acceptance-tests:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: setup docker CA
+        run: |
+          sudo mkdir -p /etc/docker/certs.d/registry..io/
+          echo "${{ secrets.DOCKER_CA }}" | sudo tee /etc/docker/certs.d/registry..io/ca.crt > /dev/null
+
+      - name: docker login registry..io
+        uses: docker/login-action@v3
+        with:
+          registry: registry..io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up docker buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config-inline: |
+            [registry."registry..io"]
+              ca=["/etc/docker/certs.d/registry..io/ca.crt"]
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: ./integration
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE }}:sha-${{ github.sha }}
+
+      # PRO TIP: Remember any cypress env vars added here must be passed through to the Cypress docker container in the
+      # docker run command below (i.e., `docker run ... -e <envVarName>`).
+      - name: Run tests
+        env:
+          ENVIRONMENT: ${{ inputs.target || 'dev0' }}
+          TESTS: ${{ inputs.tests }}
+          CYPRESS_RECORD_KEY: ${{ inputs.cypress_record_key }}
+          CYPRESS_PROJECT_ID: ${{ inputs.cypress_project_id }}
+          CYPRESS_tenant: ${{ inputs.tenant || '' }}
+          CYPRESS_apiKey: ${{ inputs.target == 'staging0' && secrets.CYPRESS_API_KEY_STAGING0 || inputs.target == 'qa0' && secrets.CYPRESS_API_KEY_QA0 || secrets.CYPRESS_API_KEY_DEV0 }}
+          CYPRESS_nonAdminPassword: ${{ secrets.CYPRESS_NONADMINPASSWORD }}
+          CYPRESS_adminPassword: ${{ secrets.CYPRESS_ADMINPASSWORD }}
+          CYPRESS_auditLogTestPassword: ${{ secrets.CYPRESS_AUDITLOGTESTPASSWORD }}
+          CYPRESS_imapMailboxPassword: ${{ secrets.CYPRESS_IMAPMAILBOXPASSWORD }}
+          CYPRESS_ssoPassword: ${{ secrets.CYPRESS_SSOPASSWORD }}
+          CYPRESS_ssoV2Password: ${{ secrets.CYPRESS_SSOV2_PASSWORD }}
+        run: |
+          cd integration
+          mkdir -p ./results/
+          IFS=',' read -ra ftests <<< "$TESTS"
+          for ftest in "${ftests[@]}"; do ltests+="cypress/e2e/$ftest.ts,"; done
+          ltests="${ltests%,}"
+          docker run -v $(pwd)/results:/opt/integration/results -e CYPRESS_tenant -e CYPRESS_apiKey -e CYPRESS_nonAdminPassword -e CYPRESS_adminPassword -e CYPRESS_auditLogTestPassword -e CYPRESS_imapMailboxPassword -e CYPRESS_ssoPassword -e CYPRESS_ssoV2Password -e CYPRESS_RECORD_KEY -e CYPRESS_PROJECT_ID ${{ env.REGISTRY }}/${{ env.IMAGE }}:sha-${{ github.sha }} cypress:run:${{ env.ENVIRONMENT }} ${{ (env.TESTS || env.CYPRESS_RECORD_KEY) && '-- ' || '' }} ${{ env.TESTS && '--spec "$ltests"' || '' }} ${{ env.CYPRESS_RECORD_KEY && '--record' || '' }}
+
+      - name: Parse results
+        if: ${{ !cancelled() }}
+        env:
+          RESULTS_PATH: ./results
+        run: |
+          cd integration
+          npm install fast-xml-parser
+          node process-results.js > test_results.json
+          cat test_results.json
+
+      - name: Upload artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results_${{ inputs.target || 'dev0' }}
+          path: integration/test_results.json
+          if-no-files-found: error
