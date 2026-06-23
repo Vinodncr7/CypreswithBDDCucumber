@@ -1,0 +1,5 @@
+node_modules/
+.cypress/
+coverage/
+.DS_Store
+npm-debug.log
