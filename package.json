@@ -1,0 +1,36 @@
+{
+  "name": "cypress-demo-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Vinod Mali",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@badeball/cypress-cucumber-preprocessor": "^24.0.1",
+    "@bahmutov/cypress-esbuild-preprocessor": "^2.2.8",
+    "@cypress/webpack-preprocessor": "^7.1.1",
+    "@cypress/xpath": "^2.0.3",
+    "cypress": "^15.17.0",
+    "cypress-file-upload": "^5.0.8",
+    "cypress-fill-command": "^1.0.2",
+    "cypress-if": "^1.16.1",
+    "cypress-iframe": "^1.0.1",
+    "mysql2": "^3.22.5",
+    "path-browserify": "^1.0.1",
+    "pdf-parse": "^2.4.5"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "cypress-cucumber-preprocessor": {
+    "stepDefinitions": [
+      "cypress/e2e/step_definitions/**/*.{js,mjs,ts,tsx}",
+      "cypress/support/step_definitions/**/*.{js,mjs,ts,tsx}"
+    ]
+  }
+}
