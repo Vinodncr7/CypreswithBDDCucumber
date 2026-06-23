@@ -1,0 +1,112 @@
+# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
+
+name: Cypress_run_workflow
+on:
+  workflow_call: 
+    inputs:
+      target:
+        description: "The target environment against which the tests should run"
+        required: true
+        type: string
+        default: "dev0"
+      tenant:
+        description: "If provided, target the specified tenant (a.k.a. customer)"
+        required: false
+        type: string
+        default: "Vinod"
+      tests:
+        description: 'If provided, only run the specified tests (comma-delimited). Set Specs files without .ts suffix like "admin/tenant_settings_spec,login/sso,login/reset_password_email_spec"'
+        required: false
+        type: string
+      cypress_record_key:
+        description: "Cypress Record Key. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-a-Record-Key"
+        required: false
+        type: string
+      cypress_project_id:
+        description: "Cypress Project ID. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-the-projectId-for"
+        required: false
+        type: string
+        
+    secrets:
+        DOCKER_CA:
+          required: true
+        DOCKER_USERNAME:
+          required: true
+        DOCKER_PASSWORD:
+          required: true
+        CYPRESS_NONADMINPASSWORD:
+          required: true
+        CYPRESS_ADMINPASSWORD:
+          required: true
+        CYPRESS_AUDITLOGTESTPASSWORD:
+          required: true
+        CYPRESS_IMAPMAILBOXPASSWORD:
+          required: true
+        CYPRESS_SSOPASSWORD:
+          required: true
+        CYPRESS_SSOV2_PASSWORD:
+          required: true
+        CYPRESS_API_KEY_DEV0:
+          required: true
+        CYPRESS_API_KEY_QA0:
+          required: true
+        CYPRESS_API_KEY_STAGING0:
+          required: true
+ workflow_dispatch:
+    inputs:
+      target:
+        description: "The ThreatX target environment against which the tests should run"
+        required: true
+        type: choice
+        options:
+          - dev0
+          - qa0
+          - staging0
+        default: "dev0"
+      tenant:
+        description: "If provided, target the specified tenant (a.k.a. customer)"
+        required: false
+        type: string
+        default: "threatx"
+      tests:
+        description: 'If provided, only run the specified tests (comma-delimited). Set Specs files without .ts suffix like "admin/tenant_settings_spec,login/sso,login/reset_password_email_spec". See available tests in https://github.com/ThreatX/threatx-ctrlx/tree/main/integration/cypress/e2e'
+        required: false
+        type: string
+      cypress_record_key:
+        description: "Cypress Record Key. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-a-Record-Key"
+        required: false
+        type: string
+      cypress_project_id:
+        description: "Cypress Project ID. If provided, record the test run in Cypress Dashboard. See https://docs.cypress.io/faq/questions/cloud-faq#What-is-the-projectId-for"
+        required: false
+        type: string
+ 
+      
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.npm_token}}
